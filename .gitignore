@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+.uv-cache/
+.uv-python/
+
+# Environment and secrets
+.env
+!.env.example
+
+# Frontend
+node_modules/
+dist/
+.vite/
+
+# IDE and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Generated artifacts
+tmp/
+output/
+*.pbix~

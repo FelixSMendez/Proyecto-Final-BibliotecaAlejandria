@@ -1,0 +1,67 @@
+services:
+  # PostgreSQL operativo y vectorial del proyecto.
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: alejandria
+      POSTGRES_USER: alejandria
+      POSTGRES_PASSWORD: alejandria_dev
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/001_initial_schema.sql:/docker-entrypoint-initdb.d/001_initial_schema.sql:ro
+      - ./database/002_seed_data.sql:/docker-entrypoint-initdb.d/002_seed_data.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U alejandria -d alejandria"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # API que aplica migraciones antes de aceptar tráfico.
+  backend:
+    build:
+      context: ./backend
+    environment:
+      APP_ENV: development
+      DATABASE_URL: postgresql+psycopg://alejandria:alejandria_dev@db:5432/alejandria
+      JWT_SECRET: local-compose-secret-change-before-production
+      CORS_ORIGINS: http://localhost:5173
+      AI_PROVIDER: ${AI_PROVIDER:-gemini}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_CHAT_MODEL: ${AI_CHAT_MODEL:-gemini-3.8-flash}
+      AI_EMBEDDING_MODEL: ${AI_EMBEDDING_MODEL:-gemini-embedding-001}
+      AI_EMBEDDING_DIMENSIONS: ${AI_EMBEDDING_DIMENSIONS:-1536}
+      AI_RETRY_ATTEMPTS: ${AI_RETRY_ATTEMPTS:-3}
+      AI_RETRY_BACKOFF_SECONDS: ${AI_RETRY_BACKOFF_SECONDS:-1}
+      AI_THINKING_BUDGET: ${AI_THINKING_BUDGET:-0}
+      EXTERNAL_API_TIMEOUT_SECONDS: ${EXTERNAL_API_TIMEOUT_SECONDS:-8}
+      EXTERNAL_API_USER_AGENT: ${EXTERNAL_API_USER_AGENT:-BibliotecaAlejandria/0.1 (academic project)}
+      WIKIMEDIA_USER_AGENT: ${WIKIMEDIA_USER_AGENT:-}
+      RAG_CHUNK_SIZE: ${RAG_CHUNK_SIZE:-1800}
+      RAG_CHUNK_OVERLAP: ${RAG_CHUNK_OVERLAP:-200}
+      RAG_TOP_K: ${RAG_TOP_K:-5}
+      RAG_INDEX_BATCH_SIZE: ${RAG_INDEX_BATCH_SIZE:-20}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+  # SPA React servida por Nginx con acceso a la API local.
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: http://localhost:8000/api/v1
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
